@@ -4,11 +4,11 @@ import asyncio
 from discord.ext import commands, tasks
 from itertools import cycle
 from discord.utils import format_dt
-from datetime import datetime
+from datetime import datetime, timedelta
 
-token = "token_here" # Token for your discord bot from https://discord.com/developers/applications/
+
+token = "bot_token" # Token for your discord bot from https://discord.com/developers/applications/
 log_channel_id = 1082220200440627211  # Universal log channel for Bot. Replace with your log channel ID
-
 # Restricted words the bot will erase
 inappropriate_words = {
     "fuck", "nigga", "bitch", "asshole", "cunt", "dick", "bastard", 
@@ -29,6 +29,7 @@ inappropriate_words = {
     "pissface", "douchewaffle", "thot", "cockgobbler", "jerkoff", "fuckknuckle", "fannybaws",
     "cumbubble", "arseclown", "cockmongler", "turdnugget", "assclown", "fucknugget", "wankstain"
 }
+confession_channel_id = 1082220200440627211 # The channel where your confessions will be posted
 
 
 bot = commands.Bot(command_prefix="b.", intents=discord.Intents.all())
@@ -40,6 +41,8 @@ status = cycle([
 
 @bot.event
 async def on_ready():
+    global start_time
+    start_time = datetime.utcnow()
     change_status.start()
     print("Bot is up & ready!")
     try:
@@ -114,5 +117,58 @@ async def say(ctx, thing_to_say: str):
     if log_channel:
         timestamp = format_dt(datetime.now(), style="f")
         await log_channel.send(f"**[{timestamp} UTC]** - **{ctx.author.name}** used /say in <#{ctx.channel.id}>")
+        
+# Confession 
+@bot.slash_command(
+    name="confess",
+    description="Make an anonymous confession in #confessions. DMs are supported!"
+)
+async def confess(
+    ctx, 
+    confession: str, 
+    image: discord.Attachment = None,  # Make the attachment optional by setting a default value of None
+    anonymous: bool = True  # Added an optional boolean input with a default value of True
+):
+    # Replace "\n" with newline characters
+    confession = confession.replace("\\n", "\n")
+
+    # Define the channel ID for confessions
+    channel = bot.get_channel(confession_channel_id)
+
+    if anonymous:
+        embed = discord.Embed(title="Confession by Anonymous User", description=confession)
+    else:
+        user = ctx.user  # Get the user who initiated the command
+        embed = discord.Embed(title=f"Confession by {user.display_name}", description=confession)
+
+    embed.set_footer(
+        text=f"Date and Time: {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')}")
+    embed.color = random.randint(0, 0xFFFFFF)
+
+    # Check if an attachment was provided
+    if image:
+        embed.set_image(url=image.url)  # Add the attachment as an image to the embed
+
+    await channel.send(embed=embed)
+    await ctx.response.send_message(f"Sent to {channel.name}!", ephemeral=True)
+    
+    
+    
+# Uptime
+@bot.slash_command(name="uptime", description="Check how long the bot has been running for!")
+async def uptime(ctx):
+    current_time = datetime.utcnow()
+    uptime = current_time - start_time
+
+    # Calculate hours and minutes for uptime
+    hours = uptime // timedelta(hours=1)
+    minutes = (uptime // timedelta(minutes=1)) % 60
+
+    # Format the bot start time as a Unix timestamp
+    start_timestamp = int(start_time.timestamp())
+    formatted_start_time = f"<t:{start_timestamp}>"
+
+    await ctx.respond(f"Bot has been up for {hours} h {minutes} m.\nBot started on {formatted_start_time}", ephemeral=True)
+
 
 bot.run(token)
