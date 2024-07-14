@@ -7,8 +7,10 @@ from discord.utils import format_dt
 from datetime import datetime, timedelta
 
 
-token = "bot_token" # Token for your discord bot from https://discord.com/developers/applications/
+token = "MTI2MjAwNTgyNzMyNjMxNjY3NQ.GyiriK.rEgcPCpR081qern4KHhsUvSID4vJw2LzQGI6f4" # Token for your discord bot from https://discord.com/developers/applications/
 log_channel_id = 1082220200440627211  # Universal log channel for Bot. Replace with your log channel ID
+welcome_channel_id = 1082220200440627211  # Replace with your welcome channel ID
+leave_channel_id = 1082220200440627211  # Replace with your leave channel ID
 # Restricted words the bot will erase
 inappropriate_words = {
     "fuck", "nigga", "bitch", "asshole", "cunt", "dick", "bastard", 
@@ -62,6 +64,37 @@ async def on_ready():
 async def change_status():
     activity = next(status)
     await bot.change_presence(status=discord.Status.idle, activity=activity)
+    
+welcome_channel_id = 1082220200440627211  # Replace with your welcome channel ID
+leave_channel_id = 1082220200440627211  # Replace with your leave channel ID
+
+@bot.event
+async def on_member_join(member):
+    welcome_messages = [
+        "Guess who decided to join us? You're right, it's {member}!",
+        "Hey {member}, how did you find the depths of hell?",
+        "If you love your life, leave {member}.",
+        "Welcome, {member}! Your fate of absolute doom has been sealed.",
+        "{member} how did you get out of the basement?"
+    ]
+    welcome_message = random.choice(welcome_messages).format(member=member.mention)
+    welcome_channel = bot.get_channel(welcome_channel_id)
+    if welcome_channel:
+        await welcome_channel.send(welcome_message)
+
+@bot.event
+async def on_member_remove(member):
+    leave_messages = [
+        "Guess {member} was too scared. Well I'll be under their bed tonight!",
+        "No one misses {member}. Really!",
+        "Take care, {member}[.](https://tenor.com/jdcQKTnP98T.gif)",
+        "Did someone fall into the void? Was it {member}? Meh, who cares anyways..."
+    ]
+    leave_message = random.choice(leave_messages).format(member=member.display_name)
+    leave_channel = bot.get_channel(leave_channel_id)
+    if leave_channel:
+        await leave_channel.send(leave_message)
+
 
 
 # Ping command
@@ -169,6 +202,32 @@ async def uptime(ctx):
     formatted_start_time = f"<t:{start_timestamp}>"
 
     await ctx.respond(f"Bot has been up for {hours} h {minutes} m.\nBot started on {formatted_start_time}", ephemeral=True)
+
+# Server Stats
+@bot.slash_command(name="server_stats", description="Displays server statistics")
+async def serverstats(ctx):
+    guild = ctx.guild
+    owner = guild.owner.mention
+    admins = [member.mention for member in guild.members if any(role.permissions.administrator for role in member.roles) and not member.bot]
+    total_members = guild.member_count
+    human_members = len([member for member in guild.members if not member.bot])
+    bot_count = total_members - human_members
+    channel_count = len(guild.channels)
+    role_count = len(guild.roles)
+    created_at = format_dt(guild.created_at, style="f")
+
+    embed = discord.Embed(title=f"{guild.name} Stats", color=random.randint(0, 0xFFFFFF))
+    embed.set_thumbnail(url=guild.icon.url if guild.icon else None)
+    embed.add_field(name="First spotted in the wild", value=created_at, inline=True)
+    embed.add_field(name="Server Owner", value=owner, inline=True)
+    embed.add_field(name="Server Admins", value=", ".join(admins) if admins else "None", inline=True)
+    embed.add_field(name="Total Members", value=total_members, inline=True)
+    embed.add_field(name="Human Members", value=human_members, inline=True)
+    embed.add_field(name="Bot Count", value=bot_count, inline=True)
+    embed.add_field(name="Number of Channels", value=channel_count, inline=True)
+    embed.add_field(name="Number of Roles", value=role_count, inline=True)
+
+    await ctx.respond(embed=embed, ephemeral=True)
 
 
 bot.run(token)
