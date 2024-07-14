@@ -7,7 +7,7 @@ from discord.utils import format_dt
 from datetime import datetime, timedelta
 
 
-token = "MTI2MjAwNTgyNzMyNjMxNjY3NQ.GyiriK.rEgcPCpR081qern4KHhsUvSID4vJw2LzQGI6f4" # Token for your discord bot from https://discord.com/developers/applications/
+token = "bot_token" # Token for your discord bot from https://discord.com/developers/applications/
 log_channel_id = 1082220200440627211  # Universal log channel for Bot. Replace with your log channel ID
 welcome_channel_id = 1082220200440627211  # Replace with your welcome channel ID
 leave_channel_id = 1082220200440627211  # Replace with your leave channel ID
