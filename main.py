@@ -15,7 +15,7 @@ from akinator import (
 )
 
 
-token = "token here" # Token for your discord bot from https://discord.com/developers/applications/
+token = "token_here" # Token for your discord bot from https://discord.com/developers/applications/
 log_channel_id = 1082220200440627211  # Universal log channel for Bot. Replace with your log channel ID
 welcome_channel_id = 1082220200440627211  # Replace with your welcome channel ID
 leave_channel_id = 1082220200440627211  # Replace with your leave channel ID
