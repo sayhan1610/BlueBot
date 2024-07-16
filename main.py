@@ -358,54 +358,16 @@ async def akinator_game(ctx):
         if akchannel:
             await akchannel.delete()
 
+# Music Bot
+
 players = {}
 
-# Ensure you handle NoneType gracefully in your play command
-@bot.slash_command(
-    name="play",
-    description="Play a YouTube video/audio in the voice channel"
-)
-async def play(ctx, url: str):
-    voice_channel = ctx.author.voice.channel
-    if voice_channel:
-        voice_client = await voice_channel.connect()
-        player = await YTDLSource.from_url(url, loop=bot.loop)
-        if player:
-            voice_client.play(player, after=lambda e: print(f'Player error: {e}') if e else None)
-        else:
-            await ctx.respond("Failed to play the audio from the provided URL.", ephemeral=True)
-    else:
-        await ctx.respond("You need to be in a voice channel to use this command.", ephemeral=True)
-
-@bot.slash_command(name="stop")
-async def stop(ctx):
-    voice_client = ctx.voice_client
-    if voice_client:
-        await voice_client.disconnect()
-        players.pop(ctx.guild.id, None)
-
-class YTDLSource(discord.PCMVolumeTransformer):
-    def __init__(self, source, *, data, volume=0.5):
-        super().__init__(source, volume)
-        self.data = data
-
-    @classmethod
-    async def from_url(cls, url, *, loop=None):
-        loop = loop or asyncio.get_event_loop()
-        try:
-            data = await loop.run_in_executor(None, lambda: youtube_dl.YoutubeDL({}).extract_info(url, download=False))
-            if "entries" in data:
-                data = data["entries"][0]
-            filename = data["url"]
-            return cls(discord.FFmpegPCMAudio(filename, **ffmpeg_options), data=data)
-        except Exception as e:
-            print(f"Error extracting info: {e}")
-            return None  # Return None if extraction fails
-
+# Define your ffmpeg options and youtube-dl options
 ffmpeg_options = {
     'options': '-vn',
     'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5'
 }
+
 ydl_opts = {
     'format': 'bestaudio/best',
     'outtmpl': '%(extractor)s-%(id)s-%(title)s.%(ext)s',
@@ -419,6 +381,62 @@ ydl_opts = {
     'default_search': 'auto',
     'source_address': '0.0.0.0',  # bind to ipv4 since ipv6 addresses cause issues sometimes
     'verbose': True,  # Add this line for verbose output
-} 
+}
+
+# YTDLSource class to handle audio sources
+class YTDLSource(discord.PCMVolumeTransformer):
+    def __init__(self, source, *, data, volume=0.5, shuffle=False, loop=False):
+        super().__init__(source, volume)
+        self.data = data
+        self.shuffle = shuffle
+        self.loop = loop
+
+    @classmethod
+    async def from_url(cls, url, *, loop=None, shuffle=False):
+        loop = loop or asyncio.get_event_loop()
+        try:
+            data = await loop.run_in_executor(None, lambda: youtube_dl.YoutubeDL(ydl_opts).extract_info(url, download=False))
+            if "entries" in data:
+                data = data["entries"][0]
+            filename = data["url"]
+            return cls(discord.FFmpegPCMAudio(filename, **ffmpeg_options), data=data, shuffle=shuffle, loop=loop)
+        except Exception as e:
+            print(f"Error extracting info: {e}")
+            return None  # Return None if extraction fails
+
+# Play command to play audio from a YouTube URL
+@bot.command(name="play")
+async def play(ctx, url: str, shuffle: bool = False, loop: bool = False):
+    voice_channel = ctx.author.voice.channel
+    if voice_channel:
+        voice_client = await voice_channel.connect()
+        player = await YTDLSource.from_url(url, loop=bot.loop, shuffle=shuffle, loop=loop)
+        if player:
+            voice_client.play(player, after=lambda e: print(f'Player error: {e}') if e else None)
+            players[ctx.guild.id] = voice_client
+        else:
+            await ctx.send("Failed to play the audio from the provided URL.")
+    else:
+        await ctx.send("You need to be in a voice channel to use this command.")
+
+# Stop command to disconnect the bot from the voice channel
+@bot.command(name="stop")
+async def stop(ctx):
+    voice_client = ctx.voice_client
+    if voice_client:
+        await voice_client.disconnect()
+        players.pop(ctx.guild.id, None)
+
+# Shuffle command to shuffle the current playlist (implementation needed)
+@bot.command(name="shuffle")
+async def shuffle(ctx):
+    # Implement shuffle functionality as per your requirements
+    pass
+
+# Loop command to toggle looping of the current track or playlist (implementation needed)
+@bot.command(name="loop")
+async def loop(ctx):
+    # Implement loop functionality as per your requirements
+    pass
 
 bot.run(token)
