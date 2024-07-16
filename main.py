@@ -13,10 +13,18 @@ from akinator import (
     Answer,
     Theme,
 )
+from typing import Optional
+from akinator import (
+    CantGoBackAnyFurther,
+    InvalidAnswer,
+    Akinator,
+    Answer,
+    Theme,
+)
 import youtube_dl
 
 
-token = "bot_token" # Token for your discord bot from https://discord.com/developers/applications/
+token = "token_here" # Token for your discord bot from https://discord.com/developers/applications/
 log_channel_id = 1082220200440627211  # Universal log channel for Bot. Replace with your log channel ID
 welcome_channel_id = 1082220200440627211  # Replace with your welcome channel ID
 leave_channel_id = 1082220200440627211  # Replace with your leave channel ID
@@ -237,6 +245,62 @@ async def serverstats(ctx):
     embed.add_field(name="Number of Roles", value=role_count, inline=True)
 
     await ctx.respond(embed=embed, ephemeral=True)
+
+
+# Akinator
+@bot.slash_command(
+    name="akinator",
+    description="Play the Akinator game. Try to guess who/what you are thinking of!"
+)
+async def akinator_game(ctx):
+    theme = "characters"  # Default theme is characters
+    theme = Theme.from_str(theme)
+    aki = Akinator(child_mode=False, theme=theme)
+    
+    await ctx.respond("The game will begin shortly. Respond with 'yes', 'no', 'probably', 'probably not', 'i don't know', or 'back'.", ephemeral=True)
+    
+    akchannel = None  # Initialize akchannel outside the try block
+    
+    try:
+        async with ctx.channel.typing():
+            first_question = aki.start_game()
+            akchannel = await ctx.channel.create_webhook(name="Galactinator", reason="Akinator game")
+            
+            await akchannel.send(first_question)
+
+            def check(message):
+                return message.author == ctx.author and message.channel == ctx.channel
+
+            while aki.progression <= 80:
+                answer = await bot.wait_for("message", check=check, timeout=60)
+                answer_content = answer.content.lower()
+                
+                if answer_content == 'back':
+                    try:
+                        aki.back()
+                        await akchannel.send(f"Went back 1 question! {aki.question}")
+                    except CantGoBackAnyFurther:
+                        await akchannel.send("Cannot go back any further!")
+                else:
+                    try:
+                        answer = Answer.from_str(answer_content)
+                    except InvalidAnswer:
+                        await akchannel.send("Invalid answer")
+                    else:
+                        aki.answer(answer)
+                        await akchannel.send(aki.question)
+
+            first_guess = aki.win()
+
+            if first_guess:
+                embed = discord.Embed(title="Akinator Results", description=first_guess.description, color=random.randint(0, 0xFFFFFF))
+                embed.set_thumbnail(url=first_guess.absolute_picture_path)
+                await akchannel.send(embed=embed)
+    except asyncio.TimeoutError:
+        await ctx.respond("Timeout: The game has ended.", ephemeral=True)
+    finally:
+        if akchannel:
+            await akchannel.delete()
 
 
 # Akinator
