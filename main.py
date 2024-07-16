@@ -5,6 +5,15 @@ from discord.ext import commands, tasks
 from itertools import cycle
 from discord.utils import format_dt
 from datetime import datetime, timedelta
+from typing import Optional
+from akinator import (
+    CantGoBackAnyFurther,
+    InvalidAnswer,
+    Akinator,
+    Answer,
+    Theme,
+)
+import youtube_dl
 
 
 token = "bot_token" # Token for your discord bot from https://discord.com/developers/applications/
@@ -230,4 +239,121 @@ async def serverstats(ctx):
     await ctx.respond(embed=embed, ephemeral=True)
 
 
+# Akinator
+@bot.slash_command(
+    name="akinator",
+    description="Play the Akinator game. Try to guess who/what you are thinking of!"
+)
+async def akinator_game(ctx):
+    theme = "characters"  # Default theme is characters
+    theme = Theme.from_str(theme)
+    aki = Akinator(child_mode=False, theme=theme)
+    
+    await ctx.respond("The game will begin shortly. Respond with 'yes', 'no', 'probably', 'probably not', 'i don't know', or 'back'.", ephemeral=True)
+    
+    akchannel = None  # Initialize akchannel outside the try block
+    
+    try:
+        async with ctx.channel.typing():
+            first_question = aki.start_game()
+            akchannel = await ctx.channel.create_webhook(name="Galactinator", reason="Akinator game")
+            
+            await akchannel.send(first_question)
+
+            def check(message):
+                return message.author == ctx.author and message.channel == ctx.channel
+
+            while aki.progression <= 80:
+                answer = await bot.wait_for("message", check=check, timeout=60)
+                answer_content = answer.content.lower()
+                
+                if answer_content == 'back':
+                    try:
+                        aki.back()
+                        await akchannel.send(f"Went back 1 question! {aki.question}")
+                    except CantGoBackAnyFurther:
+                        await akchannel.send("Cannot go back any further!")
+                else:
+                    try:
+                        answer = Answer.from_str(answer_content)
+                    except InvalidAnswer:
+                        await akchannel.send("Invalid answer")
+                    else:
+                        aki.answer(answer)
+                        await akchannel.send(aki.question)
+
+            first_guess = aki.win()
+
+            if first_guess:
+                embed = discord.Embed(title="Akinator Results", description=first_guess.description, color=random.randint(0, 0xFFFFFF))
+                embed.set_thumbnail(url=first_guess.absolute_picture_path)
+                await akchannel.send(embed=embed)
+    except asyncio.TimeoutError:
+        await ctx.respond("Timeout: The game has ended.", ephemeral=True)
+    finally:
+        if akchannel:
+            await akchannel.delete()
+
+players = {}
+
+# Ensure you handle NoneType gracefully in your play command
+@bot.slash_command(
+    name="play",
+    description="Play a YouTube video/audio in the voice channel"
+)
+async def play(ctx, url: str):
+    voice_channel = ctx.author.voice.channel
+    if voice_channel:
+        voice_client = await voice_channel.connect()
+        player = await YTDLSource.from_url(url, loop=bot.loop)
+        if player:
+            voice_client.play(player, after=lambda e: print(f'Player error: {e}') if e else None)
+        else:
+            await ctx.respond("Failed to play the audio from the provided URL.", ephemeral=True)
+    else:
+        await ctx.respond("You need to be in a voice channel to use this command.", ephemeral=True)
+
+@bot.slash_command(name="stop")
+async def stop(ctx):
+    voice_client = ctx.voice_client
+    if voice_client:
+        await voice_client.disconnect()
+        players.pop(ctx.guild.id, None)
+
+class YTDLSource(discord.PCMVolumeTransformer):
+    def __init__(self, source, *, data, volume=0.5):
+        super().__init__(source, volume)
+        self.data = data
+
+    @classmethod
+    async def from_url(cls, url, *, loop=None):
+        loop = loop or asyncio.get_event_loop()
+        try:
+            data = await loop.run_in_executor(None, lambda: youtube_dl.YoutubeDL({}).extract_info(url, download=False))
+            if "entries" in data:
+                data = data["entries"][0]
+            filename = data["url"]
+            return cls(discord.FFmpegPCMAudio(filename, **ffmpeg_options), data=data)
+        except Exception as e:
+            print(f"Error extracting info: {e}")
+            return None  # Return None if extraction fails
+
+ffmpeg_options = {
+    'options': '-vn',
+    'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5'
+}
+ydl_opts = {
+    'format': 'bestaudio/best',
+    'outtmpl': '%(extractor)s-%(id)s-%(title)s.%(ext)s',
+    'restrictfilenames': True,
+    'noplaylist': True,
+    'nocheckcertificate': True,
+    'ignoreerrors': False,
+    'logtostderr': False,
+    'quiet': False,
+    'no_warnings': False,
+    'default_search': 'auto',
+    'source_address': '0.0.0.0',  # bind to ipv4 since ipv6 addresses cause issues sometimes
+    'verbose': True,  # Add this line for verbose output
+}
 bot.run(token)
